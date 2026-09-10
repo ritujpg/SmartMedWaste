@@ -1,0 +1,62 @@
+from enum import Enum
+
+
+class UserRole(str, Enum):
+    FACILITY_ADMIN = "FACILITY_ADMIN"
+    COLLECTOR = "COLLECTOR"
+    ADMINISTRATOR = "ADMINISTRATOR"
+
+
+class WasteCategory(str, Enum):
+    YELLOW = "YELLOW"
+    RED = "RED"
+    WHITE = "WHITE"
+    BLUE = "BLUE"
+
+
+class WasteStatus(str, Enum):
+    GENERATED = "GENERATED"
+    SEGREGATED = "SEGREGATED"
+    COLLECTION_REQUESTED = "COLLECTION_REQUESTED"
+    ASSIGNED = "ASSIGNED"
+    COLLECTOR_EN_ROUTE = "COLLECTOR_EN_ROUTE"
+    PICKED_UP = "PICKED_UP"
+    IN_TRANSIT = "IN_TRANSIT"
+    DELIVERED = "DELIVERED"
+    PROCESSED = "PROCESSED"
+
+
+class CollectionPriority(str, Enum):
+    NORMAL = "NORMAL"
+    HIGH = "HIGH"
+    EMERGENCY = "EMERGENCY"
+
+
+class CollectionStatus(str, Enum):
+    REQUESTED = "REQUESTED"
+    ASSIGNED = "ASSIGNED"
+    COLLECTOR_EN_ROUTE = "COLLECTOR_EN_ROUTE"
+    PICKED_UP = "PICKED_UP"
+    IN_TRANSIT = "IN_TRANSIT"
+    DELIVERED = "DELIVERED"
+    PROCESSED = "PROCESSED"
+    CANCELLED = "CANCELLED"
+
+
+class CollectorStatus(str, Enum):
+    AVAILABLE = "AVAILABLE"
+    ON_ROUTE = "ON_ROUTE"
+    BUSY = "BUSY"
+    OFFLINE = "OFFLINE"
+
+
+class AlertSeverity(str, Enum):
+    INFO = "INFO"
+    WARNING = "WARNING"
+    CRITICAL = "CRITICAL"
+
+
+class ComplianceStatus(str, Enum):
+    COMPLIANT = "COMPLIANT"
+    NEEDS_ATTENTION = "NEEDS_ATTENTION"
+    CRITICAL = "CRITICAL"
