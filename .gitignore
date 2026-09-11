@@ -1,5 +1,7 @@
+# =========================
 # Logs
-logs
+# =========================
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,15 +9,27 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# =========================
+# Node
+# =========================
+node_modules/
+dist/
+dist-ssr/
 *.local
 
-# Editor directories and files
+# =========================
+# Environment variables
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Editor
+# =========================
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
@@ -23,5 +37,48 @@ dist-ssr
 *.sln
 *.sw?
 
+# =========================
+# Build / tooling
+# =========================
 .config/
-!.env
+
+# =========================
+# Frontend
+# =========================
+.next/
+out/
+.vercel/
+coverage/
+
+# =========================
+# Python backend
+# =========================
+server/.venv/
+server/__pycache__/
+server/**/*.pyc
+server/*.pyc
+server/*.pyo
+server/*.pyd
+
+server/**/.pytest_cache/
+server/**/.mypy_cache/
+server/**/.ruff_cache/
+
+# =========================
+# Local databases
+# =========================
+server/*.db
+server/*.sqlite
+server/*.sqlite3
+
+# =========================
+# Uploads / generated files
+# =========================
+server/uploads/
+server/media/
+server/generated/
+
+# =========================
+# OS files
+# =========================
+Thumbs.db
