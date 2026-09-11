@@ -22,11 +22,23 @@ from app.api.facility_routes import router as facility_router
 from app.api.collection_routes import router as collection_router
 from app.api.tracking_routes import router as tracking_router
 from app.api.emergency_routes import router as emergency_router
+from app.api.collector_routes import router as collector_router
+from app.api.admin_routes import router as admin_router
+from app.api.compliance_routes import router as compliance_router
+from app.api.credits_routes import router as credits_router
+from app.api.analytics_routes import router as analytics_router
+from app.api.detection_routes import router as detection_router
 
-router.include_router(auth_router)
-router.include_router(waste_router)
-router.include_router(facility_router)
-router.include_router(collection_router)
-router.include_router(tracking_router)
-router.include_router(emergency_router)
+router.include_router(auth_router, prefix="/api")
+router.include_router(waste_router, prefix="/api")
+router.include_router(facility_router, prefix="/api")
+router.include_router(collection_router, prefix="/api")
+router.include_router(tracking_router, prefix="/api")
+router.include_router(emergency_router, prefix="/api")
+router.include_router(collector_router, prefix="/api")
+router.include_router(admin_router, prefix="/api")
+router.include_router(compliance_router, prefix="/api")
+router.include_router(credits_router, prefix="/api")
+router.include_router(analytics_router, prefix="/api")
+router.include_router(detection_router)
 

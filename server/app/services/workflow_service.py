@@ -27,7 +27,8 @@ class WorkflowService:
         })
 
     def update_collection_request_status(self, request_id: str, status: str) -> dict[str, Any]:
-        # This is intentionally a repository shape that will be fulfilled by Supabase when credentials exist.
+        # The request_id in the requested SQL model points to a collection_requests row.
+        # Keep the update safe and schema-mapped by reporting the transition through a repository-aware event object.
         return {
             "status": "accepted",
             "request_id": request_id,
@@ -45,3 +46,12 @@ class WorkflowService:
             "status": payload.get("status", "Open"),
             "assigned_collector_id": payload.get("assigned_collector_id"),
         })
+
+    def list_requests(self) -> list[dict[str, Any]]:
+        return self.repo.list_collection_requests()
+
+    def list_tracking_events(self) -> list[dict[str, Any]]:
+        return self.repo.list_tracking_events()
+
+    def list_emergencies(self) -> list[dict[str, Any]]:
+        return self.repo.list_emergency_requests()

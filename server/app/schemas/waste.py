@@ -13,3 +13,12 @@ class ClassificationResponse(BaseModel):
     recommended_bin: str
     reason: str
     requires_human_verification: bool
+
+
+class WasteCreateRequest(BaseModel):
+    category: str = "YELLOW"
+    quantity_kg: float = 0.0
+    priority: str = "Normal"
+    requires_human_verification: bool = False
+    image_url: Optional[str] = None
+    status: str = "Requested"

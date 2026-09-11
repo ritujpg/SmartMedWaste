@@ -1,16 +1,60 @@
 from __future__ import annotations
 
-import base64
-import binascii
 from typing import Any
+from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, status, Body
 
 from app.core.config import settings
 from app.services.ai_provider import GeminiProvider
-from app.services.classification_service import ClassificationService
+from app.services.supabase_repository import SupabaseRepository
+from app.schemas.waste import WasteCreateRequest
 
-router = APIRouter(prefix="/api", tags=["waste"])
+router = APIRouter(tags=["waste"])
+
+
+@router.post("/waste")
+async def create_waste(payload: WasteCreateRequest = Body(...)) -> dict[str, Any]:
+    repo = SupabaseRepository()
+    tracking_id = f"WM-{uuid4().hex[:12].upper()}"
+    row = {
+        "tracking_id": tracking_id,
+        "category": payload.category,
+        "quantity_kg": payload.quantity_kg,
+        "priority": payload.priority,
+        "requires_human_verification": payload.requires_human_verification,
+        "image_url": payload.image_url,
+        "status": payload.status,
+    }
+    result = repo.insert_waste_record(row)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("detail", "waste insert failed"))
+    if result.get("status") == "skipped":
+        raise HTTPException(status_code=503, detail=result.get("detail", "Supabase is not configured"))
+    rows = result.get("data") or []
+    if rows:
+        return rows[0]
+    return {"status": "inserted", "tracking_id": tracking_id}
+
+
+@router.get("/waste/{waste_id}")
+async def get_waste_record(waste_id: str) -> dict[str, Any]:
+    repo = SupabaseRepository()
+    row = repo.get_waste_record_by_id(waste_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Waste record not found")
+    return row
+
+
+@router.delete("/waste/{waste_id}")
+async def delete_waste_record(waste_id: str) -> dict[str, Any]:
+    repo = SupabaseRepository()
+    result = repo.delete_waste_record_by_id(waste_id)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("detail", "waste delete failed"))
+    if result.get("status") == "skipped":
+        raise HTTPException(status_code=503, detail=result.get("detail", "Supabase is not configured"))
+    return {"status": "deleted", "id": waste_id}
 
 
 @router.post("/waste/classify")

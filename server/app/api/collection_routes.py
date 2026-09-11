@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
 from app.services.workflow_service import WorkflowService
 
-router = APIRouter(prefix="/api", tags=["collection"])
+router = APIRouter(tags=["collection"])
 
 
 @router.get("/collection-requests")

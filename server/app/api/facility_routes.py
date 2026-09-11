@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
-router = APIRouter(prefix="/api", tags=["facility"])
+router = APIRouter(tags=["facility"])
 
 
 @router.get("/facilities")
