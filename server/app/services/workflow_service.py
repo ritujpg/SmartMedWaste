@@ -19,21 +19,12 @@ class WorkflowService:
             "estimated_quantity": payload.get("estimated_quantity", payload.get("quantity_kg", 0)),
             "quantity_unit": payload.get("quantity_unit", "kg"),
             "priority": payload.get("priority", "Normal"),
-            "special_handling_requirement": (
-                payload.get("special_handling_requirement")
-                or payload.get("special_handling")
-            ),
+            "special_handling_requirement": payload.get("special_handling_requirement") or payload.get("special_handling"),
             "pickup_location": payload.get("pickup_location", ""),
             "notes": payload.get("notes") or payload.get("pickup_notes"),
-            "preferred_pickup_date": (
-                payload.get("preferred_pickup_date") or payload.get("pickup_date")
-            ),
-            "preferred_pickup_time": (
-                payload.get("preferred_pickup_time") or payload.get("pickup_time")
-            ),
-            "assigned_collector_id": (
-                payload.get("assigned_collector_id") or payload.get("collector_id")
-            ),
+            "preferred_pickup_date": payload.get("preferred_pickup_date") or payload.get("pickup_date"),
+            "preferred_pickup_time": payload.get("preferred_pickup_time") or payload.get("pickup_time"),
+            "assigned_collector_id": payload.get("assigned_collector_id") or payload.get("collector_id"),
             "status": payload.get("status", "Requested"),
         })
 

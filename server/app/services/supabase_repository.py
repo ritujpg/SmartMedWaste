@@ -348,7 +348,7 @@ class SupabaseRepository:
                 query = query.eq("facility_id", facility.get("id")) if facility else query.eq("facility_id", "00000000-0000-0000-0000-000000000000")
             elif role == "collector":
                 collector = self.get_collector_by_user_id(str(user.get("id")))
-                query = query.eq("collector_id", collector.get("id")) if collector else query.eq("collector_id", "00000000-0000-0000-0000-000000000000")
+                query = query.eq("assigned_collector_id", collector.get("id")) if collector else query.eq("assigned_collector_id", "00000000-0000-0000-0000-000000000000")
             return query.order("created_at", desc=True).execute().data or []
         except Exception:
             return []
@@ -357,7 +357,7 @@ class SupabaseRepository:
         if not self.client:
             return None
         try:
-            result = self.client.table("collection_requests").select("*").eq("request_id", request_id).limit(1).execute()
+            result = self.client.table("collection_requests").select("*").eq("request_code", request_id).limit(1).execute()
             rows = result.data or []
             return rows[0] if rows else None
         except Exception:
@@ -367,7 +367,7 @@ class SupabaseRepository:
         if not self.client:
             return {"status": "skipped", "detail": "Supabase is not configured"}
         try:
-            result = self.client.table("collection_requests").update(values).eq("request_id", request_id).execute()
+            result = self.client.table("collection_requests").update(values).eq("request_code", request_id).execute()
             return {"status": "updated", "data": result.data or []}
         except Exception as exc:
             return {"status": "error", "detail": str(exc)}
