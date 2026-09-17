@@ -106,6 +106,45 @@ class SupabaseRepository:
         except Exception as exc:
             return {"status": "error", "detail": str(exc)}
 
+    
+    def insert_facility(self, row: dict[str, Any]) -> dict[str, Any]:
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+
+        try:
+            result = self.client.table("facilities").insert({
+                "user_id": row["user_id"],
+                "name": row["name"],
+                "is_active": True,
+            }).execute()
+
+            return {"status": "inserted", "data": result.data or []}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
+    def insert_collector(self, row: dict[str, Any]) -> dict[str, Any]:
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+        try:
+            result = self.client.table("collectors").insert({
+                "user_id": row["user_id"],
+                "name": row["name"],
+                "organization": row.get("organization"),
+                "status": "available",
+            }).execute()
+            return {"status": "inserted", "data": result.data or []}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
+    def delete_facility_by_user_id(self, user_id: str) -> dict[str, Any]:
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+        try:
+            self.client.table("facilities").delete().eq("user_id", user_id).execute()
+            return {"status": "deleted"}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
     def insert_waste_record(self, row: dict[str, Any]) -> dict[str, Any]:
         if not self.client:
             return {"status": "skipped", "detail": "SUPABASE_URL and SUPABASE_SECRET_KEY are not configured"}
@@ -148,6 +187,15 @@ class SupabaseRepository:
         try:
             result = self.client.table("emergency_requests").insert(row).execute()
             return {"status": "inserted", "data": result.data or []}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
+    def update_emergency_request(self, request_id: str, values: dict[str, Any]) -> dict[str, Any]:
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+        try:
+            result = self.client.table("emergency_requests").update(values).eq("request_id", request_id).execute()
+            return {"status": "updated", "data": result.data or []}
         except Exception as exc:
             return {"status": "error", "detail": str(exc)}
 
@@ -280,5 +328,138 @@ class SupabaseRepository:
         try:
             data = self.client.table("tracking_events").select("*").execute()
             return data.data or []
+        except Exception:
+            return []
+
+    def get_facility_by_user_id(self, user_id: str) -> dict[str, Any] | None:
+        return self._single("facilities", "user_id", user_id)
+
+    def get_collector_by_user_id(self, user_id: str) -> dict[str, Any] | None:
+        return self._single("collectors", "user_id", user_id)
+
+    def list_collection_requests_for_user(self, user: dict[str, Any]) -> list[dict[str, Any]]:
+        if not self.client:
+            return []
+        try:
+            query = self.client.table("collection_requests").select("*")
+            role = str(user.get("role") or "")
+            if role == "facility":
+                facility = self.get_facility_by_user_id(str(user.get("id")))
+                query = query.eq("facility_id", facility.get("id")) if facility else query.eq("facility_id", "00000000-0000-0000-0000-000000000000")
+            elif role == "collector":
+                collector = self.get_collector_by_user_id(str(user.get("id")))
+                query = query.eq("collector_id", collector.get("id")) if collector else query.eq("collector_id", "00000000-0000-0000-0000-000000000000")
+            return query.order("created_at", desc=True).execute().data or []
+        except Exception:
+            return []
+
+    def get_collection_request(self, request_id: str) -> dict[str, Any] | None:
+        if not self.client:
+            return None
+        try:
+            result = self.client.table("collection_requests").select("*").eq("request_id", request_id).limit(1).execute()
+            rows = result.data or []
+            return rows[0] if rows else None
+        except Exception:
+            return None
+
+    def update_collection_request(self, request_id: str, values: dict[str, Any]) -> dict[str, Any]:
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+        try:
+            result = self.client.table("collection_requests").update(values).eq("request_id", request_id).execute()
+            return {"status": "updated", "data": result.data or []}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
+    def update_waste_record(self, waste_id: str, values: dict[str, Any]) -> dict[str, Any]:
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+        try:
+            result = self.client.table("waste_records").update(values).eq("id", waste_id).execute()
+            return {"status": "updated", "data": result.data or []}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
+    def get_waste_by_tracking_id(self, tracking_id: str) -> dict[str, Any] | None:
+        return self._single("waste_records", "tracking_id", tracking_id)
+
+    def list_tracking_events_for_record(self, waste_record_id: str) -> list[dict[str, Any]]:
+        if not self.client:
+            return []
+        try:
+            return self.client.table("tracking_events").select("*").eq("waste_record_id", waste_record_id).order("event_at").execute().data or []
+        except Exception:
+            return []
+
+    def insert_route(self, row: dict[str, Any]) -> dict[str, Any]:
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+        try:
+            result = self.client.table("routes").insert(row).execute()
+            return {"status": "inserted", "data": result.data or []}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
+    def insert_route_stops(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+        if not rows:
+            return {"status": "inserted", "data": []}
+        try:
+            result = self.client.table("route_stops").insert(rows).execute()
+            return {"status": "inserted", "data": result.data or []}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
+    def update_route(self, route_id: str, values: dict[str, Any]) -> dict[str, Any]:
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+        try:
+            result = self.client.table("routes").update(values).eq("id", route_id).execute()
+            return {"status": "updated", "data": result.data or []}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
+    def list_routes_for_collector(self, collector_id: str) -> list[dict[str, Any]]:
+        return self._rows("routes") if not self.client else self.client.table("routes").select("*").eq("collector_id", collector_id).order("created_at", desc=True).execute().data or []
+
+    def list_alerts_for_user(self, user: dict[str, Any]) -> list[dict[str, Any]]:
+        if not self.client:
+            return []
+        try:
+            query = self.client.table("alerts").select("*").eq("user_id", str(user.get("id")))
+            return query.order("created_at", desc=True).execute().data or []
+        except Exception:
+            return []
+
+    def update_alert(self, alert_id: str, values: dict[str, Any]) -> dict[str, Any]:
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+        try:
+            result = self.client.table("alerts").update(values).eq("id", alert_id).execute()
+            return {"status": "updated", "data": result.data or []}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
+    def list_green_credit_transactions(self, facility_id: str | None = None) -> list[dict[str, Any]]:
+        if not self.client:
+            return []
+        try:
+            query = self.client.table("green_credit_transactions").select("*")
+            if facility_id:
+                query = query.eq("facility_id", facility_id)
+            return query.order("created_at", desc=True).execute().data or []
+        except Exception:
+            return []
+
+    def list_compliance_records_for_facility(self, facility_id: str | None = None) -> list[dict[str, Any]]:
+        if not self.client:
+            return []
+        try:
+            query = self.client.table("compliance_records").select("*")
+            if facility_id:
+                query = query.eq("facility_id", facility_id)
+            return query.order("created_at", desc=True).execute().data or []
         except Exception:
             return []

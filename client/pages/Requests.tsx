@@ -1,10 +1,16 @@
-﻿import { FormEvent, useState } from "react";
+﻿import { FormEvent, useEffect, useState } from "react";
 import { CalendarDays, Check, ClipboardCheck, Clock3, MoreHorizontal, Plus, Search, Truck, Users, X, AlertTriangle } from "lucide-react";
 import { CardTitle, EmptyState, PageHeading, StatCard, StatusBadge } from "@/components/dashboard/primitives";
-import { categories, requestSeed, statuses, Request } from "@/components/dashboard/data";
+import { categories, statuses } from "@/components/dashboard/data";
+import { apiGet, apiPost } from "@/lib/api";
+import type { CollectionRequest, WasteCategory } from "@/lib/types";
+
+const categoryLabels: Record<WasteCategory, string> = { YELLOW: "Yellow", RED: "Red", WHITE: "White", BLUE: "Blue" };
+type Request = CollectionRequest;
 export function Requests() {
-  const [requests, setRequests] =
-    useState<Request[]>(requestSeed);
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All statuses");
@@ -17,10 +23,17 @@ export function Requests() {
   const [modal, setModal] = useState(false);
   const [toast, setToast] = useState("");
 
+  useEffect(() => {
+    apiGet<{ items: Request[] }>("/api/collection-requests")
+      .then((response) => setRequests(response.items))
+      .catch((err) => setError(err instanceof Error ? err.message : "Requests could not be loaded."))
+      .finally(() => setLoading(false));
+  }, []);
+
   const filtered = requests.filter(
     (item) =>
       (!query ||
-        `${item.id} ${item.facility}`
+        `${item.request_id} ${item.facility_id || ""}`
           .toLowerCase()
           .includes(query.toLowerCase())) &&
       (status === "All statuses" ||
@@ -29,27 +42,28 @@ export function Requests() {
         item.priority === priority),
   );
 
-  const submit = (e: FormEvent<HTMLFormElement>) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const data = new FormData(e.currentTarget);
 
-    const next = {
-      id: `REQ-${24100 + requests.length}`,
-      facility: "Apollo Hospitals",
-      category: String(data.get("category")),
-      quantity: `${data.get("quantity")} kg`,
-      priority: String(data.get("priority")),
-      collector: "Unassigned",
-      pickup: `${data.get("date")}, ${data.get("time")}`,
-      status: "Requested",
-    } as Request;
-
-    setRequests((current) => [next, ...current]);
-    setModal(false);
-    setToast(`${next.id} created successfully`);
-
-    setTimeout(() => setToast(""), 2800);
+    try {
+      const next = await apiPost<Request>("/api/collection-requests", {
+        category: String(data.get("category")).toUpperCase(),
+        quantity_kg: Number(data.get("quantity")),
+        priority: String(data.get("priority")),
+        special_handling: String(data.get("handling") || ""),
+        pickup_date: String(data.get("date")),
+        pickup_time: String(data.get("time")),
+        pickup_notes: String(data.get("notes") || ""),
+      });
+      setRequests((current) => [next, ...current]);
+      setModal(false);
+      setToast(`${next.request_id} created successfully`);
+      setTimeout(() => setToast(""), 2800);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Request could not be created.");
+    }
   };
 
   return (
@@ -128,6 +142,8 @@ export function Requests() {
       </div>
 
       <div className="panel mt-4">
+        {error && <div className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{error}</div>}
+        {loading && <div className="mb-4 text-xs text-slate-500">Loading requests...</div>}
         <div className="mb-4 flex flex-wrap gap-2">
           <div className="search-box">
             <Search size={15} />
@@ -192,25 +208,25 @@ export function Requests() {
             <tbody>
               {filtered.map((item) => (
                 <tr
-                  key={item.id}
+                  key={item.request_id}
                   onClick={() => setSelected(item)}
                   className="cursor-pointer hover:bg-slate-50"
                 >
                   <td className="font-bold text-navy">
-                    {item.id}
+                    {item.request_id}
                   </td>
 
-                  <td>{item.facility}</td>
+                  <td>{item.facility_id || "Assigned facility"}</td>
 
                   <td>
                     <span
                       className={`category-dot category-${item.category.toLowerCase()}`}
                     />
-                    {item.category}
+                    {categoryLabels[item.category] || item.category}
                   </td>
 
                   <td className="font-semibold">
-                    {item.quantity}
+                    {item.quantity_kg} kg
                   </td>
 
                   <td>
@@ -221,8 +237,8 @@ export function Requests() {
                     </span>
                   </td>
 
-                  <td>{item.collector}</td>
-                  <td>{item.pickup}</td>
+                  <td>{item.collector_id || "Unassigned"}</td>
+                  <td>{item.pickup_date || "-"}{item.pickup_time ? `, ${item.pickup_time}` : ""}</td>
 
                   <td>
                     <StatusBadge status={item.status} />
@@ -297,7 +313,7 @@ function RequestDrawer({
             </p>
 
             <h2 className="mt-1 text-xl font-bold text-navy">
-              {item.id}
+              {item.request_id}
             </h2>
           </div>
 
@@ -312,17 +328,17 @@ function RequestDrawer({
         <div className="grid grid-cols-2 gap-3 py-5">
           <Detail
             label="Facility"
-            value={item.facility}
+            value={item.facility_id || "Assigned facility"}
           />
 
           <Detail
             label="Category"
-            value={`${item.category} bin`}
+            value={`${categoryLabels[item.category] || item.category} bin`}
           />
 
           <Detail
             label="Quantity"
-            value={item.quantity}
+            value={`${item.quantity_kg} kg`}
           />
 
           <Detail
@@ -337,7 +353,7 @@ function RequestDrawer({
 
           <Detail
             label="Collector"
-            value={item.collector}
+            value={item.collector_id || "Unassigned"}
           />
 
           <Detail

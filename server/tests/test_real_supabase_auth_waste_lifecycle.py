@@ -56,7 +56,7 @@ def test_real_supabase_auth_waste_lifecycle():
         'image_url': '',
         'status': 'Requested'
     }
-    create_waste = client.post('/api/waste', json=waste_payload)
+    create_waste = client.post('/api/waste', json=waste_payload, headers={'Authorization': 'Bearer ' + token})
     print('waste_create_status', create_waste.status_code)
     print('waste_create_body', create_waste.text[:300])
     assert create_waste.status_code == 200, create_waste.text
@@ -68,11 +68,14 @@ def test_real_supabase_auth_waste_lifecycle():
             waste_id = created['data'][0].get('id')
     assert waste_id
 
-    get_waste = client.get(f'/api/waste/{waste_id}')
+    get_waste = client.get(f'/api/waste/{waste_id}', headers={'Authorization': 'Bearer ' + token})
     print('waste_get_status', get_waste.status_code)
     print('waste_get_body', get_waste.text[:300])
     assert get_waste.status_code == 200, get_waste.text
 
+    delete_facility = repo.delete_facility_by_user_id(fetched['id'])
+    print('delete_facility_status', delete_facility)
+    assert delete_facility.get('status') == 'deleted'
     delete_user = repo.delete_user_by_email(email)
     print('delete_user_status', delete_user)
     assert delete_user.get('status') == 'deleted'

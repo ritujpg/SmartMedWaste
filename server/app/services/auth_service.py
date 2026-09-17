@@ -72,6 +72,31 @@ class AuthService:
 
         # Verify the row was truly inserted through Supabase persistence.
         user = self.repo.get_user_by_email(email)
+        if user and str(payload.get("role")) == "facility":
+            facility_result = self.repo.insert_facility({
+                "user_id": user["id"],
+                "name": payload["organization"],
+            })
+            if facility_result.get("status") != "inserted":
+                self.repo.delete_user_by_email(email)
+                return {
+                    "status": "error",
+                    "detail": facility_result.get("detail", "facility provisioning failed"),
+                    "user": None,
+                }
+        elif user and str(payload.get("role")) == "collector":
+            collector_result = self.repo.insert_collector({
+                "user_id": user["id"],
+                "name": payload["name"],
+                "organization": payload.get("organization", ""),
+            })
+            if collector_result.get("status") != "inserted":
+                self.repo.delete_user_by_email(email)
+                return {
+                    "status": "error",
+                    "detail": collector_result.get("detail", "collector provisioning failed"),
+                    "user": None,
+                }
         return {
             "status": "created" if user else "pending",
             "user": self.serialize_user(user) if user else {

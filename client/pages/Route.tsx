@@ -2,6 +2,7 @@
 import * as maplibregl from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { PageHeading } from "@/components/dashboard/primitives";
+import { apiPost } from "@/lib/api";
 
 maplibregl.setWorkerUrl(workerUrl);
 function RouteMap() {
@@ -18,6 +19,7 @@ function RouteMap() {
   const [status, setStatus] = useState("");
   const [distance, setDistance] = useState<string | null>(null);
   const [duration, setDuration] = useState<string | null>(null);
+  const [saved, setSaved] = useState("");
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
@@ -318,6 +320,19 @@ function RouteMap() {
     }
   };
 
+  const saveRoute = async () => {
+    if (!destination.trim()) {
+      setStatus("Enter a destination first.");
+      return;
+    }
+    try {
+      await apiPost("/api/routes", { name: destination.trim(), request_ids: [] });
+      setSaved("Route saved");
+    } catch (error) {
+      setSaved(error instanceof Error ? error.message : "Route could not be saved.");
+    }
+  };
+
   return (
     <div className="relative z-0 h-[420px] w-full overflow-hidden rounded-xl">
       <div
@@ -368,11 +383,16 @@ function RouteMap() {
           </button>
         </div>
 
+        <button type="button" onClick={() => void saveRoute()} className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+          Save route plan
+        </button>
+
         {status && (
           <p className="mt-2 text-xs text-slate-500">
             {status}
           </p>
         )}
+        {saved && <p className="mt-2 text-xs font-semibold text-teal">{saved}</p>}
 
         {(distance || duration) && (
           <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">

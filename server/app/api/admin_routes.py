@@ -2,28 +2,29 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.core.dependencies import require_roles
+from app.services.supabase_repository import SupabaseRepository
 
 router = APIRouter(tags=["admin"])
 
 
 @router.get("/admin/dashboard")
-async def admin_dashboard() -> dict[str, Any]:
-    return {
-        "name": "Ananya Rao",
-        "total_facilities": 8,
-        "total_collectors": 6,
-        "total_waste_kg": 1264,
-        "compliance_score": 92,
-        "active_emergencies": 1,
-    }
+async def admin_dashboard(user: dict[str, Any] = Depends(require_roles("administrator"))) -> dict[str, Any]:
+    return SupabaseRepository().list_admin_dashboard()
 
 
 @router.get("/admin/facilities")
-async def admin_facilities() -> dict[str, Any]:
-    return {"items": [{"id": "fac-1", "name": "Apollo Hospitals", "status": "active", "compliance_score": 92}]}
+async def admin_facilities(user: dict[str, Any] = Depends(require_roles("administrator"))) -> dict[str, Any]:
+    return {"items": SupabaseRepository().list_facilities()}
 
 
 @router.get("/admin/collectors")
-async def admin_collectors() -> dict[str, Any]:
-    return {"items": [{"id": "col-1", "name": "Arjun Mehta", "status": "available", "route": "RTE-2401"}]}
+async def admin_collectors(user: dict[str, Any] = Depends(require_roles("administrator"))) -> dict[str, Any]:
+    return {"items": SupabaseRepository().list_collectors()}
+
+
+@router.get("/admin/users")
+async def admin_users(user: dict[str, Any] = Depends(require_roles("administrator"))) -> dict[str, Any]:
+    return {"items": SupabaseRepository().query_users()}

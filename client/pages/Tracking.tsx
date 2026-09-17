@@ -1,19 +1,29 @@
 ﻿import { useState } from "react";
 import { Check, QrCode, Search } from "lucide-react";
 import { CardTitle, PageHeading, StatusBadge } from "@/components/dashboard/primitives";
-import { requestSeed } from "@/components/dashboard/data";
+import { apiGet } from "@/lib/api";
+import type { TrackingRecord } from "@/lib/types";
 export function Tracking() {
   const [search, setSearch] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [record, setRecord] = useState<TrackingRecord | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const match =
-    requestSeed.find(
-      (item) =>
-        item.id
-          .replace("REQ", "WM")
-          .includes(search.toUpperCase()) ||
-        item.id.includes(search.toUpperCase()),
-    ) || requestSeed[0];
+  const lookup = async () => {
+    const trackingId = search.trim().toUpperCase().replace(/^WM-/, "WM-");
+    if (!trackingId) return;
+    setLoading(true);
+    try {
+      setRecord(await apiGet<TrackingRecord>(`/api/tracking/${encodeURIComponent(trackingId)}`));
+      setError("");
+    } catch (err) {
+      setRecord(null);
+      setError(err instanceof Error ? err.message : "Tracking record could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -50,9 +60,16 @@ export function Tracking() {
               onChange={(e) =>
                 setSearch(e.target.value)
               }
+              onKeyDown={(e) => { if (e.key === "Enter") void lookup(); }}
               placeholder="Search WM-240184"
             />
           </div>
+
+          <button className="secondary-button mt-2" onClick={() => void lookup()} disabled={loading}>
+            {loading ? "Loading..." : "Find record"}
+          </button>
+
+          {error && <p className="mt-3 text-xs font-semibold text-rose-600">{error}</p>}
 
           {scanning && (
             <div className="scanner-box mt-4">
@@ -83,16 +100,13 @@ export function Tracking() {
                 Active record
               </p>
 
-              <h3 className="mt-1 text-lg font-bold text-navy">
-                WM-{match.id.slice(4)}
-              </h3>
+              <h3 className="mt-1 text-lg font-bold text-navy">{record?.tracking_id || "No record selected"}</h3>
 
               <p className="mt-1 text-xs text-slate-500">
-                {match.facility} - {match.quantity} -{" "}
-                {match.category} bin
+                {record ? `${record.category} bin - ${record.quantity_kg} kg` : "Search for a persistent tracking ID"}
               </p>
 
-              <StatusBadge status={match.status} />
+              {record && <StatusBadge status={record.status} />}
             </div>
           </div>
         </div>
@@ -104,50 +118,15 @@ export function Tracking() {
           />
 
           <div className="timeline large-timeline">
-            {[
-              "Waste Generated",
-              "Segregated",
-              "Collection Requested",
-              "Collector Assigned",
-              "Picked Up",
-              "In Transit",
-              "Received",
-              "Processed",
-            ].map((step, index) => (
-              <div
-                className={`timeline-item ${
-                  index < 6 ? "timeline-active" : ""
-                }`}
-                key={step}
-              >
-                <span className="timeline-node">
-                  {index < 6 ? (
-                    <Check size={11} />
-                  ) : (
-                    index + 1
-                  )}
-                </span>
-
-                <div>
-                  <p>{step}</p>
-
-                  <span>
-                    {index < 6
-                      ? `18 Jun 2024 - ${
-                          [
-                            "08:40",
-                            "08:48",
-                            "09:12",
-                            "09:20",
-                            "10:35",
-                            "11:10",
-                          ][index]
-                        } AM`
-                      : "Awaiting event"}
-                  </span>
-                </div>
+            {(record?.events || []).map((event) => (
+              <div className="timeline-item timeline-active" key={event.id}>
+                <span className="timeline-node"><Check size={11} /></span>
+                <div><p>{event.event_type}</p><span>{new Date(event.event_at).toLocaleString()}</span></div>
               </div>
             ))}
+            {!record?.events?.length && (
+              <p className="text-xs text-slate-500">No tracking events found.</p>
+            )}
           </div>
         </div>
       </div>

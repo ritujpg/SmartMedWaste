@@ -1,10 +1,12 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Zap } from "lucide-react";
 import { CardTitle, PageHeading, StatusBadge } from "@/components/dashboard/primitives";
+import { apiPostForm, apiPost } from "@/lib/api";
 export function Scanner() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectInFlight = useRef(false);
+  const lastPersistedRef = useRef({ object: "", at: 0 });
 
   const apiBase = (
     import.meta.env.VITE_API_URL || "http://localhost:8000"
@@ -203,21 +205,7 @@ export function Scanner() {
         "camera-frame.jpg",
       );
 
-      const response = await fetch(
-        `${apiBase}/detect`,
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `Detection API returned ${response.status}`,
-        );
-      }
-
-      const payload = await response.json();
+      const payload = await apiPostForm<any>("/detect", formData);
 
       const box = normalizeBox(
         payload.box,
@@ -231,6 +219,12 @@ export function Scanner() {
       };
 
       setResult(normalizedPayload);
+
+      const now = Date.now();
+      if (payload.object && Number(payload.confidence || 0) >= 0.7 && (payload.object !== lastPersistedRef.current.object || now - lastPersistedRef.current.at > 30000)) {
+        await apiPost("/api/waste/detections", payload);
+        lastPersistedRef.current = { object: payload.object, at: now };
+      }
 
       if (!payload.object) {
         setStatus("No medical waste detected");

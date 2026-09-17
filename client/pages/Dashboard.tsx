@@ -1,11 +1,11 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ArrowUpRight, FileText, Leaf, PackageCheck, Plus, QrCode, ScanLine, ShieldCheck, Sparkles, Truck } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { SessionUser } from "@/lib/auth";
 import { Header, Sidebar } from "@/components/dashboard/navigation";
 import { CardTitle, PageHeading, QuickAction, StatCard } from "@/components/dashboard/primitives";
-import { categoryData, wasteTrend } from "@/components/dashboard/data";
+import { apiGet } from "@/lib/api";
 import Scanner from "./Scanner";
 import Requests from "./Requests";
 import Tracking from "./Tracking";
@@ -14,7 +14,15 @@ import RoutePage from "./Route";
 import AlertsPage from "./Alerts";
 import HistoryPage from "./History";
 import AdminPage from "./Admin";
-function Overview({ user }: { user: SessionUser }) {
+type Analytics = {
+  total_waste_kg: number;
+  pending_collections: number;
+  daily_trend: { day: string; value: number }[];
+  waste_by_category: Record<string, number>;
+};
+
+function Overview({ user, analytics }: { user: SessionUser; analytics: Analytics | null }) {
+  const categoryData = Object.entries(analytics?.waste_by_category || {}).map(([name, value], index) => ({ name, value, color: ["#e7b94a", "#e5766c", "#6aa8d7", "#b6c4d5"][index % 4] }));
   return (
     <>
       <PageHeading
@@ -38,8 +46,7 @@ function Overview({ user }: { user: SessionUser }) {
         <StatCard
           icon={PackageCheck}
           label="Waste generated today"
-          value="46.2 kg"
-          change="+8.4%"
+          value={analytics ? `${analytics.total_waste_kg.toFixed(1)} kg` : "--"}
           tone="tone-teal"
           note="vs yesterday"
         />
@@ -47,8 +54,7 @@ function Overview({ user }: { user: SessionUser }) {
         <StatCard
           icon={Truck}
           label="Pending collections"
-          value="07"
-          change="-12.5%"
+          value={analytics ? String(analytics.pending_collections).padStart(2, "0") : "--"}
           tone="tone-blue"
           note="2 urgent"
         />
@@ -56,8 +62,7 @@ function Overview({ user }: { user: SessionUser }) {
         <StatCard
           icon={Sparkles}
           label="Segregation accuracy"
-          value="96.4%"
-          change="+2.1%"
+          value="--"
           tone="tone-purple"
           note="this week"
         />
@@ -65,16 +70,14 @@ function Overview({ user }: { user: SessionUser }) {
         <StatCard
           icon={ShieldCheck}
           label="Compliance score"
-          value="92 / 100"
-          change="+4.6%"
+          value="--"
           tone="tone-green"
         />
 
         <StatCard
           icon={Leaf}
           label="Green credits"
-          value="2,840"
-          change="+180"
+          value="--"
           tone="tone-amber"
           note="this month"
         />
@@ -91,7 +94,7 @@ function Overview({ user }: { user: SessionUser }) {
           <div className="h-[220px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={wasteTrend}
+                data={analytics?.daily_trend || []}
                 margin={{ top: 8, right: 4, left: -28, bottom: 0 }}
               >
                 <defs>
@@ -191,7 +194,7 @@ function Overview({ user }: { user: SessionUser }) {
 
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-[24px] font-bold text-navy">
-                  46.2
+                  {analytics ? analytics.total_waste_kg.toFixed(1) : "--"}
                 </span>
                 <span className="text-[10px] text-slate-500">
                   total kg
@@ -301,6 +304,11 @@ export function Dashboard({ user }: { user: SessionUser }) {
   const location = useLocation();
   const [menuOpen, setMenuOpen] =
     useState(false);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+
+  useEffect(() => {
+    apiGet<Analytics>("/api/analytics").then(setAnalytics).catch(() => setAnalytics(null));
+  }, []);
 
   let content: React.ReactNode;
 
@@ -308,7 +316,7 @@ export function Dashboard({ user }: { user: SessionUser }) {
     location.pathname === "/" ||
     location.pathname === "/collector"
   ) {
-    content = <Overview user={user} />;
+    content = <Overview user={user} analytics={analytics} />;
   } else if (
     location.pathname === "/scanner"
   ) {

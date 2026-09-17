@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, status, Body
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Body
 
 from app.core.config import settings
+from app.core.dependencies import get_current_user_from_request, require_roles
 from app.services.ai_provider import GeminiProvider
 from app.services.supabase_repository import SupabaseRepository
 from app.schemas.waste import WasteCreateRequest
@@ -14,17 +15,20 @@ router = APIRouter(tags=["waste"])
 
 
 @router.post("/waste")
-async def create_waste(payload: WasteCreateRequest = Body(...)) -> dict[str, Any]:
+async def create_waste(payload: WasteCreateRequest = Body(...), user: dict[str, Any] = Depends(require_roles("facility", "administrator"))) -> dict[str, Any]:
     repo = SupabaseRepository()
+    facility = repo.get_facility_by_user_id(str(user.get("id")))
+    if not facility:
+        raise HTTPException(status_code=409, detail="Authenticated facility profile is not provisioned")
     tracking_id = f"WM-{uuid4().hex[:12].upper()}"
     row = {
         "tracking_id": tracking_id,
         "category": payload.category,
         "quantity_kg": payload.quantity_kg,
-        "priority": payload.priority,
         "requires_human_verification": payload.requires_human_verification,
         "image_url": payload.image_url,
         "status": payload.status,
+        "facility_id": facility.get("id") if facility else None,
     }
     result = repo.insert_waste_record(row)
     if result.get("status") == "error":
@@ -38,16 +42,20 @@ async def create_waste(payload: WasteCreateRequest = Body(...)) -> dict[str, Any
 
 
 @router.get("/waste/{waste_id}")
-async def get_waste_record(waste_id: str) -> dict[str, Any]:
+async def get_waste_record(waste_id: str, user: dict[str, Any] = Depends(get_current_user_from_request)) -> dict[str, Any]:
     repo = SupabaseRepository()
     row = repo.get_waste_record_by_id(waste_id)
     if not row:
         raise HTTPException(status_code=404, detail="Waste record not found")
+    if user.get("role") == "facility":
+        facility = repo.get_facility_by_user_id(str(user.get("id")))
+        if not facility or row.get("facility_id") != facility.get("id"):
+            raise HTTPException(status_code=403, detail="Forbidden")
     return row
 
 
 @router.delete("/waste/{waste_id}")
-async def delete_waste_record(waste_id: str) -> dict[str, Any]:
+async def delete_waste_record(waste_id: str, user: dict[str, Any] = Depends(require_roles("facility", "administrator"))) -> dict[str, Any]:
     repo = SupabaseRepository()
     result = repo.delete_waste_record_by_id(waste_id)
     if result.get("status") == "error":

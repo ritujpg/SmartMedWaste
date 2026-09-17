@@ -32,7 +32,6 @@ class ClassificationService:
             "tracking_id": "WM-auto-generated",
             "category": payload.get("predicted_category"),
             "quantity_kg": 0,
-            "priority": "Normal",
             "recommended_bin": payload.get("recommended_bin"),
             "reason": payload.get("reason"),
             "assessment_confidence": payload.get("assessment_confidence"),

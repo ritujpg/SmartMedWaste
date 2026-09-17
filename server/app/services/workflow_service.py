@@ -9,20 +9,31 @@ class WorkflowService:
     def __init__(self) -> None:
         self.repo = SupabaseRepository()
 
+    
     def create_collection_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.repo.insert_collection_request({
-            "request_id": payload.get("request_id", "REQ-SMARTMED-001"),
+            "request_code": payload.get("request_code") or payload.get("request_id"),
             "facility_id": payload.get("facility_id"),
             "waste_record_id": payload.get("waste_record_id"),
-            "category": payload.get("category"),
-            "quantity_kg": payload.get("quantity_kg", 0),
+            "waste_category": payload.get("waste_category") or payload.get("category"),
+            "estimated_quantity": payload.get("estimated_quantity", payload.get("quantity_kg", 0)),
+            "quantity_unit": payload.get("quantity_unit", "kg"),
             "priority": payload.get("priority", "Normal"),
-            "special_handling": payload.get("special_handling", "None"),
+            "special_handling_requirement": (
+                payload.get("special_handling_requirement")
+                or payload.get("special_handling")
+            ),
             "pickup_location": payload.get("pickup_location", ""),
-            "pickup_notes": payload.get("pickup_notes", ""),
-            "pickup_date": payload.get("pickup_date"),
-            "pickup_time": payload.get("pickup_time"),
-            "collector_id": payload.get("collector_id"),
+            "notes": payload.get("notes") or payload.get("pickup_notes"),
+            "preferred_pickup_date": (
+                payload.get("preferred_pickup_date") or payload.get("pickup_date")
+            ),
+            "preferred_pickup_time": (
+                payload.get("preferred_pickup_time") or payload.get("pickup_time")
+            ),
+            "assigned_collector_id": (
+                payload.get("assigned_collector_id") or payload.get("collector_id")
+            ),
             "status": payload.get("status", "Requested"),
         })
 

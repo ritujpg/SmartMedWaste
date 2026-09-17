@@ -42,3 +42,13 @@ def require_role(required_role: str):
         return user
 
     return dependency
+
+
+def require_roles(*required_roles: str):
+    def dependency(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        user = get_current_user_from_request(authorization)
+        if not user or str(user.get("role") or "") not in required_roles:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        return user
+
+    return dependency

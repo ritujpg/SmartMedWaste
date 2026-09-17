@@ -1,7 +1,7 @@
 ﻿import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { AlertCircle, Check, Hospital, RefreshCw } from "lucide-react";
-import { demoAccounts, signIn, signUp, SessionUser, UserRole } from "@/lib/auth";
+import { signIn, signUp, SessionUser, UserRole } from "@/lib/auth";
 import { Brand } from "@/components/dashboard/navigation";
 function LogoPanel() {
   return (
@@ -39,7 +39,7 @@ function LogoPanel() {
       </div>
 
       <p className="text-[10px] text-slate-500">
-        Secure demo workspace - SmartMedWaste
+        Secure workspace - SmartMedWaste
       </p>
     </div>
   );
@@ -52,8 +52,8 @@ function AuthPage({
 }) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [role, setRole] = useState<UserRole>("facility");
-  const [email, setEmail] = useState(demoAccounts.facility.email);
-  const [password, setPassword] = useState("demo123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [organization, setOrganization] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -85,6 +85,7 @@ function AuthPage({
           : await signUp({
               name,
               email,
+              password,
               role,
               organization,
             });
@@ -103,16 +104,6 @@ function AuthPage({
     } finally {
       setLoading(false);
     }
-  };
-
-  const demo = (nextRole: UserRole) => {
-    const account = demoAccounts[nextRole];
-
-    setRole(nextRole);
-    setEmail(account.email);
-    setPassword(account.password);
-    setMode("login");
-    setError("");
   };
 
   return (
@@ -285,40 +276,6 @@ function AuthPage({
               )}
             </button>
           </form>
-
-          {mode === "login" && (
-            <>
-              <div className="divider">
-                <span>OR</span>
-              </div>
-
-              <div>
-                <p className="mb-2 text-center text-[11px] font-semibold text-slate-500">
-                  Try a demo workspace
-                </p>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {(["facility", "collector", "admin"] as UserRole[]).map(
-                    (item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => demo(item)}
-                        className="demo-button"
-                      >
-                        <span className={`demo-dot demo-${item}`} />
-                        {item === "facility"
-                          ? "Facility"
-                          : item === "collector"
-                            ? "Collector"
-                            : "Admin"}
-                      </button>
-                    ),
-                  )}
-                </div>
-              </div>
-            </>
-          )}
 
           <p className="mt-7 text-center text-xs text-slate-500">
             {mode === "login"

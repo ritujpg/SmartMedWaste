@@ -1,3 +1,5 @@
+import { apiGet, apiPost, clearAccessToken, getAccessToken, setAccessToken } from "@/lib/api";
+
 export type UserRole = "facility" | "collector" | "admin";
 
 export type SessionUser = {
@@ -6,35 +8,74 @@ export type SessionUser = {
   email: string;
   role: UserRole;
   organization: string;
+  phone?: string;
+  is_active?: boolean;
+};
+
+type BackendUser = Omit<SessionUser, "role"> & {
+  role: "facility" | "collector" | "administrator";
+};
+
+type AuthResponse = {
+  access_token?: string;
+  token_type?: string;
+  user: BackendUser;
 };
 
 const SESSION_KEY = "smartmedwaste.session";
 
-export const demoAccounts: Record<UserRole, SessionUser & { password: string }> = {
-  facility: { id: "usr-facility-01", name: "Riya Kapoor", email: "facility@smartmedwaste.demo", password: "demo123", role: "facility", organization: "Apollo Hospitals" },
-  collector: { id: "usr-collector-01", name: "Arjun Mehta", email: "collector@smartmedwaste.demo", password: "demo123", role: "collector", organization: "GreenRoute Logistics" },
-  admin: { id: "usr-admin-01", name: "Ananya Rao", email: "admin@smartmedwaste.demo", password: "demo123", role: "admin", organization: "SmartMedWaste Operations" },
-};
+function normalizeRole(role: BackendUser["role"]): UserRole {
+  return role === "administrator" ? "admin" : role;
+}
+
+function mapUser(user: BackendUser): SessionUser {
+  return { ...user, role: normalizeRole(user.role) };
+}
+
+function saveSession(user: SessionUser): SessionUser {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  return user;
+}
 
 export function getSession(): SessionUser | null {
   const stored = localStorage.getItem(SESSION_KEY);
-  return stored ? JSON.parse(stored) as SessionUser : null;
+  if (!stored || !getAccessToken()) return null;
+  try {
+    return JSON.parse(stored) as SessionUser;
+  } catch {
+    signOut();
+    return null;
+  }
+}
+
+export async function restoreSession(): Promise<SessionUser | null> {
+  if (!getAccessToken()) return null;
+  try {
+    return saveSession(mapUser(await apiGet<BackendUser>("/api/auth/me")));
+  } catch {
+    signOut();
+    return null;
+  }
 }
 
 export async function signIn(email: string, password: string): Promise<SessionUser> {
-  await new Promise((resolve) => setTimeout(resolve, 450));
-  const account = Object.values(demoAccounts).find((candidate) => candidate.email === email && candidate.password === password);
-  if (!account) throw new Error("We couldn’t match that email and password.");
-  const session = { id: account.id, name: account.name, email: account.email, role: account.role, organization: account.organization };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return session;
+  const response = await apiPost<AuthResponse>("/api/auth/login", { email, password });
+  if (!response.access_token) throw new Error("The backend did not return an access token.");
+  setAccessToken(response.access_token);
+  return saveSession(mapUser(response.user));
 }
 
-export async function signUp(input: { name: string; email: string; role: UserRole; organization: string }): Promise<SessionUser> {
-  await new Promise((resolve) => setTimeout(resolve, 650));
-  const session = { id: `usr-${Date.now()}`, name: input.name, email: input.email, role: input.role, organization: input.organization };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return session;
+export async function signUp(input: { name: string; email: string; password: string; role: UserRole; organization: string }): Promise<SessionUser> {
+  const response = await apiPost<AuthResponse>("/api/auth/signup", {
+    ...input,
+    role: input.role === "admin" ? "administrator" : input.role,
+  });
+  return response.access_token
+    ? (setAccessToken(response.access_token), saveSession(mapUser(response.user)))
+    : signIn(input.email, input.password);
 }
 
-export function signOut() { localStorage.removeItem(SESSION_KEY); }
+export function signOut(): void {
+  clearAccessToken();
+  localStorage.removeItem(SESSION_KEY);
+}
