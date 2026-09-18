@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Body
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Body, Form
 
 from app.core.config import settings
 from app.core.dependencies import get_current_user_from_request, require_roles
 from app.services.ai_provider import GeminiProvider
+from app.services.local_classifier import LocalClassificationService
 from app.services.supabase_repository import SupabaseRepository
 from app.schemas.waste import WasteCreateRequest
 
@@ -66,7 +67,7 @@ async def delete_waste_record(waste_id: str, user: dict[str, Any] = Depends(requ
 
 
 @router.post("/waste/classify")
-async def classify_waste(file: UploadFile = File(...)) -> dict[str, Any]:
+async def classify_waste(file: UploadFile = File(...), model: str = Form("gemini")) -> dict[str, Any]:
     if not file.filename:
         raise HTTPException(status_code=400, detail="image file is required")
     lower = file.filename.lower()
@@ -78,6 +79,10 @@ async def classify_waste(file: UploadFile = File(...)) -> dict[str, Any]:
     if len(contents) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="maximum image size is 10MB")
 
+    if model == "local":
+        return LocalClassificationService.classify(contents)
+    if model != "gemini":
+        raise HTTPException(status_code=400, detail="model must be either 'gemini' or 'local'")
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured")
 

@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Zap } from "lucide-react";
+import { AlertTriangle, Camera, Square, Zap } from "lucide-react";
 import { CardTitle, PageHeading, StatusBadge } from "@/components/dashboard/primitives";
 import { apiPostForm, apiPost } from "@/lib/api";
 export function Scanner() {
@@ -7,6 +7,7 @@ export function Scanner() {
   const streamRef = useRef<MediaStream | null>(null);
   const detectInFlight = useRef(false);
   const lastPersistedRef = useRef({ object: "", at: 0 });
+  const sessionRef = useRef(0);
 
   const apiBase = (
     import.meta.env.VITE_API_URL || "http://localhost:8000"
@@ -17,6 +18,7 @@ export function Scanner() {
   const [cameraError, setCameraError] = useState("");
   const [loading, setLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [mode, setMode] = useState<"detect" | "classify">("detect");
 
   const normalizeBox = (
     box: any,
@@ -78,10 +80,19 @@ export function Scanner() {
     };
   };
 
-  useEffect(() => {
-    let cancelled = false;
+  const stopCamera = () => {
+    sessionRef.current += 1;
+    const stream = streamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsRunning(false);
+    setLoading(false);
+    setStatus("Camera stopped");
+  };
 
-    async function startCamera() {
+  const startCamera = async () => {
       if (
         !navigator.mediaDevices ||
         !navigator.mediaDevices.getUserMedia
@@ -94,6 +105,7 @@ export function Scanner() {
       }
 
       try {
+        stopCamera();
         setStatus("Requesting camera access...");
 
         const stream =
@@ -106,11 +118,6 @@ export function Scanner() {
             audio: false,
           });
 
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
         streamRef.current = stream;
 
         if (videoRef.current) {
@@ -120,7 +127,7 @@ export function Scanner() {
 
         setIsRunning(true);
         setCameraError("");
-        setStatus("Live detection starting...");
+        setStatus(mode === "detect" ? "Live detection starting..." : "Live classification starting...");
       } catch (error) {
         setCameraError(
           error instanceof Error
@@ -130,22 +137,11 @@ export function Scanner() {
 
         setStatus("Camera unavailable");
       }
-    }
-
-    startCamera();
-
-    return () => {
-      cancelled = true;
-
-      const stream = streamRef.current;
-
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
     };
-  }, []);
 
-  const runDetection = async () => {
+  useEffect(() => () => stopCamera(), []);
+
+  const processFrame = async () => {
     if (!isRunning || detectInFlight.current) return;
 
     const video = videoRef.current;
@@ -156,6 +152,7 @@ export function Scanner() {
 
     detectInFlight.current = true;
     setLoading(true);
+    const session = sessionRef.current;
 
     try {
       const width = video.videoWidth;
@@ -205,13 +202,13 @@ export function Scanner() {
         "camera-frame.jpg",
       );
 
-      const payload = await apiPostForm<any>("/detect", formData);
+      if (mode === "classify") {
+        formData.append("model", "local");
+      }
+      const payload = await apiPostForm<any>(mode === "detect" ? "/detect" : "/api/waste/classify", formData);
+      if (session !== sessionRef.current || !isRunning) return;
 
-      const box = normalizeBox(
-        payload.box,
-        width,
-        height,
-      );
+      const box = mode === "detect" ? normalizeBox(payload.box, width, height) : null;
 
       const normalizedPayload = {
         ...payload,
@@ -220,17 +217,19 @@ export function Scanner() {
 
       setResult(normalizedPayload);
 
-      const now = Date.now();
-      if (payload.object && Number(payload.confidence || 0) >= 0.7 && (payload.object !== lastPersistedRef.current.object || now - lastPersistedRef.current.at > 30000)) {
-        await apiPost("/api/waste/detections", payload);
-        lastPersistedRef.current = { object: payload.object, at: now };
+      if (mode === "detect") {
+        const now = Date.now();
+        if (payload.object && Number(payload.confidence || 0) >= 0.7 && (payload.object !== lastPersistedRef.current.object || now - lastPersistedRef.current.at > 30000)) {
+          await apiPost("/api/waste/detections", payload);
+          lastPersistedRef.current = { object: payload.object, at: now };
+        }
       }
 
-      if (!payload.object) {
+      if (mode === "classify") {
+        setStatus(payload.requires_human_verification ? "Low-confidence classification" : "Live classification active");
+      } else if (!payload.object) {
         setStatus("No medical waste detected");
-      } else if (
-        Number(payload.confidence || 0) < 0.7
-      ) {
+      } else if (Number(payload.confidence || 0) < 0.7) {
         setStatus("Uncertain detection");
       } else {
         setStatus("Live detection active");
@@ -238,16 +237,16 @@ export function Scanner() {
 
       setCameraError("");
     } catch (error) {
-      console.error("Detection error:", error);
+      console.error("Camera inference error:", error);
 
       setStatus(
         error instanceof Error
           ? error.message
-          : "Backend unavailable",
+          : "Inference failed",
       );
 
       setCameraError(
-        `Backend unavailable. Make sure FastAPI is running at ${apiBase}.`,
+        `Unable to process this frame. Make sure FastAPI is running at ${apiBase}.`,
       );
     } finally {
       detectInFlight.current = false;
@@ -267,51 +266,58 @@ export function Scanner() {
 
     const id = window.setInterval(() => {
       if (!detectInFlight.current) {
-        void runDetection();
+        void processFrame();
       }
-    }, 500);
+    }, 800);
 
     return () => {
       window.clearInterval(id);
     };
-  }, [apiBase, isRunning]);
+  }, [apiBase, isRunning, mode]);
 
   return (
     <>
       <PageHeading
         eyebrow="Real-time medical waste scanner"
         title="AI Waste Scanner"
-        subtitle="Live camera scanning with automatic medical-waste object detection."
+        subtitle="Choose Roboflow detection or local YOLO classification for live camera frames."
         action={
           <span className="flex items-center gap-2 rounded-full border border-mint/30 bg-mint-pale px-3 py-2 text-[11px] font-semibold text-teal">
             <span className="pulse-dot" />
 
-            {loading
-              ? "Scanning"
-              : isRunning
-                ? "Live camera"
-                : "Starting camera"}
+            {loading ? "Processing" : isRunning ? "Live camera" : "Camera stopped"}
           </span>
         }
       />
 
-      <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-amber-900">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-amber-900">
         <AlertTriangle
           size={18}
           className="mt-0.5 shrink-0 text-amber-600"
         />
 
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-bold">
-            Live camera prototype
+            Camera inference
           </p>
 
           <p className="mt-0.5 text-[11px] leading-4 text-amber-800/80">
-            No capture, upload, or manual classification is
-            required. The scanner continuously processes the
-            live camera feed.
+            Frames are sent to the selected backend model periodically. Classification does not produce bounding boxes or disposal decisions.
           </p>
         </div>
+        <div className="flex shrink-0 gap-2">
+          <button type="button" onClick={startCamera} disabled={isRunning} className="flex items-center gap-2 rounded-lg bg-teal px-3 py-2 text-[11px] font-bold text-white disabled:opacity-50">
+            <Camera size={14} /> Start Camera
+          </button>
+          <button type="button" onClick={stopCamera} disabled={!isRunning} className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 disabled:opacity-50">
+            <Square size={13} /> Stop Camera
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button type="button" onClick={() => { stopCamera(); setMode("detect"); setResult(null); }} className={`rounded-lg px-3 py-2 text-xs font-bold ${mode === "detect" ? "bg-navy text-white" : "border border-slate-300 bg-white text-slate-700"}`}>Roboflow object detection</button>
+        <button type="button" onClick={() => { stopCamera(); setMode("classify"); setResult(null); }} className={`rounded-lg px-3 py-2 text-xs font-bold ${mode === "classify" ? "bg-navy text-white" : "border border-slate-300 bg-white text-slate-700"}`}>Local YOLO classification</button>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_.95fr]">
@@ -324,7 +330,7 @@ export function Scanner() {
           <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-inner">
             <video
               ref={videoRef}
-              className="h-[360px] w-full object-cover md:h-[440px]"
+              className="h-90 w-full object-cover md:h-110"
               autoPlay
               muted
               playsInline
@@ -340,7 +346,7 @@ export function Scanner() {
               <span className="absolute bottom-4 right-4 h-10 w-10 rounded-br-xl border-b-2 border-r-2 border-mint" />
             </div>
 
-            {result?.box && (
+            {mode === "detect" && result?.box && (
               <div
                 className="absolute border-2 border-mint bg-mint/10"
                 style={{
@@ -374,28 +380,28 @@ export function Scanner() {
 
         <div className="panel">
           <CardTitle
-            title="Detection results"
-            subtitle="Automatic medical-waste object detection"
+            title={mode === "detect" ? "Detection results" : "Classification results"}
+            subtitle={mode === "detect" ? "Roboflow object detection" : "Local YOLO11n classification"}
           />
 
           <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                Detected Object
+                {mode === "detect" ? "Detected Object" : "Predicted Class"}
               </span>
 
               <span
                 className={`status-badge ${
-                  result?.object
+                  (mode === "detect" ? result?.object : result?.predicted_class)
                     ? "status-green"
                     : "status-slate"
                 }`}
               >
                 <span className="status-dot" />
 
-                {result?.object
+                {(mode === "detect" ? result?.object : result?.predicted_class)
                   ? "Detected"
-                  : "No object"}
+                  : "No result"}
               </span>
             </div>
 
@@ -406,12 +412,11 @@ export function Scanner() {
                 </p>
 
                 <p className="mt-2 text-lg font-bold text-navy">
-                  {result?.object ||
-                    "No medical waste detected"}
+                  {mode === "detect" ? (result?.object || "No medical waste detected") : (result?.predicted_class || "No classification yet")}
                 </p>
               </div>
 
-              <div>
+              {mode === "detect" && <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   Category
                 </p>
@@ -419,9 +424,9 @@ export function Scanner() {
                 <p className="mt-2 text-lg font-bold text-navy">
                   {result?.category || "--"}
                 </p>
-              </div>
+              </div>}
 
-              <div>
+              {mode === "detect" && <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   Sub-category
                 </p>
@@ -429,7 +434,7 @@ export function Scanner() {
                 <p className="mt-2 text-lg font-bold text-navy">
                   {result?.subcategory || "--"}
                 </p>
-              </div>
+              </div>}
 
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -437,7 +442,7 @@ export function Scanner() {
                 </p>
 
                 <p className="mt-2 text-lg font-bold text-navy">
-                  {result?.bin || result?.recommended_bin || "--"}
+                  {mode === "detect" ? (result?.bin || "--") : "Not assigned"}
                 </p>
               </div>
 
@@ -462,6 +467,14 @@ export function Scanner() {
                   )}
               </div>
             </div>
+            {mode === "classify" && result?.top_predictions && (
+              <div className="mt-4 border-t border-slate-200 pt-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Top predictions</p>
+                <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                  {result.top_predictions.map((prediction: { class_name: string; confidence: number }) => <li key={prediction.class_name} className="flex justify-between"><span>{prediction.class_name}</span><span>{Math.round(prediction.confidence * 100)}%</span></li>)}
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="mt-4 rounded-xl border border-teal/10 bg-mint-pale p-4">
@@ -472,14 +485,11 @@ export function Scanner() {
 
               <div>
                 <p className="text-xs font-bold text-teal">
-                  Automatic AI segregation
+                  {mode === "detect" ? "Automatic AI segregation" : "Classification only"}
                 </p>
 
                 <p className="mt-1 text-[11px] leading-4 text-teal/80">
-                  The system continuously analyzes the camera
-                  feed and identifies waste without requiring
-                  the user to capture, upload or manually
-                  classify an item.
+                  {mode === "detect" ? "Roboflow identifies objects and may return a detection box. Verify any disposal mapping before handling waste." : "The local YOLO model identifies the most likely class. It does not assign disposal bins or authorize handling."}
                 </p>
               </div>
             </div>
