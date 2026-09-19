@@ -12,7 +12,7 @@ import Tracking from "./Tracking";
 import GenericModule from "./GenericModule";
 import RoutePage from "./Route";
 import AlertsPage from "./Alerts";
-import HistoryPage from "./History";
+import ReportsPage from "./Reports";
 import AdminPage from "./Admin";
 type Analytics = {
   total_waste_kg: number;
@@ -32,7 +32,7 @@ function Overview({ user, analytics }: { user: SessionUser; analytics: Analytics
         action={
           <>
             <Link to="/reports" className="secondary-button hidden sm:flex">
-              <FileText size={15} /> Export report
+              <FileText size={15} /> Waste Reports
             </Link>
 
             <Link to="/scanner" className="primary-button">
@@ -334,7 +334,7 @@ export function Dashboard({ user }: { user: SessionUser }) {
   } else if (location.pathname === "/alerts") {
     content = <AlertsPage user={user} />;
   } else if (location.pathname === "/reports") {
-    content = <HistoryPage user={user} />;
+    content = <ReportsPage user={user} />;
   } else if (location.pathname === "/admin") {
     content = <AdminPage user={user} />;
   } else {

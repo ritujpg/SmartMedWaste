@@ -29,6 +29,8 @@ from app.api.credits_routes import router as credits_router
 from app.api.analytics_routes import router as analytics_router
 from app.api.detection_routes import router as detection_router
 from app.api.route_routes import router as route_router
+from app.api.reports_routes import router as reports_router
+from app.api.robot_routes import router as robot_router
 
 router.include_router(auth_router, prefix="/api")
 router.include_router(waste_router, prefix="/api")
@@ -43,4 +45,6 @@ router.include_router(credits_router, prefix="/api")
 router.include_router(analytics_router, prefix="/api")
 router.include_router(detection_router)
 router.include_router(route_router, prefix="/api")
+router.include_router(reports_router, prefix="/api")
+router.include_router(robot_router, prefix="/api")
 

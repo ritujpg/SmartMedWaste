@@ -313,6 +313,26 @@ class SupabaseRepository:
         except Exception:
             return []
 
+    def list_report_records(self, table: str, user: dict[str, Any], start_date: str, end_date: str) -> list[dict[str, Any]]:
+        allowed_tables = {"waste_records", "ai_classifications", "collection_requests", "compliance_records"}
+        if table not in allowed_tables or not self.client:
+            return []
+        try:
+            query = self.client.table(table).select("*").gte("created_at", start_date).lt("created_at", end_date)
+            role = str(user.get("role") or "")
+            if role == "facility":
+                facility = self.get_facility_by_user_id(str(user.get("id")))
+                facility_id = facility.get("id") if facility else "00000000-0000-0000-0000-000000000000"
+                if table != "ai_classifications":
+                    query = query.eq("facility_id", facility_id)
+            elif role == "collector" and table == "collection_requests":
+                collector = self.get_collector_by_user_id(str(user.get("id")))
+                collector_id = collector.get("id") if collector else "00000000-0000-0000-0000-000000000000"
+                query = query.eq("assigned_collector_id", collector_id)
+            return query.order("created_at", desc=True).execute().data or []
+        except Exception:
+            return []
+
     def list_emergency_requests(self) -> list[dict[str, Any]]:
         if not self.client:
             return []

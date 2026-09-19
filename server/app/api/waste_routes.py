@@ -15,6 +15,17 @@ from app.schemas.waste import WasteCreateRequest
 router = APIRouter(tags=["waste"])
 
 
+@router.get("/waste/scanner-config")
+async def get_scanner_config() -> dict[str, str | float]:
+    mode = settings.AI_SCANNER_MODE
+    if mode not in {"detect", "classify"}:
+        mode = "detect"
+    return {
+        "mode": mode,
+        "confidence_threshold": settings.LOCAL_CLASSIFIER_CONFIDENCE_THRESHOLD,
+    }
+
+
 @router.post("/waste")
 async def create_waste(payload: WasteCreateRequest = Body(...), user: dict[str, Any] = Depends(require_roles("facility", "administrator"))) -> dict[str, Any]:
     repo = SupabaseRepository()

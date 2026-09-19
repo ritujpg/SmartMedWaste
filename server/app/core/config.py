@@ -29,6 +29,9 @@ class Settings:
     SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    AI_SCANNER_MODE = os.getenv("AI_SCANNER_MODE", "detect").strip().lower()
+    LOCAL_CLASSIFIER_CONFIDENCE_THRESHOLD = float(os.getenv("LOCAL_CLASSIFIER_CONFIDENCE_THRESHOLD", "0.70"))
+    ROBOT_API_KEY = os.getenv("ROBOT_API_KEY", "").strip()
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "smartmedwaste-dev-secret")
     CORS_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if origin.strip()]
 

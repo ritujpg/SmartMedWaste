@@ -46,6 +46,34 @@ def test_classification_does_not_assign_a_bin(monkeypatch):
     assert result["confidence"] == 0.95
     assert result["recommended_bin"] is None
     assert result["bin_mapping_verified"] is False
+    assert result["is_confident"] is True
+
+
+def test_low_confidence_classification_is_flagged(monkeypatch):
+    class FakeProbabilities:
+        top5 = [2]
+        top5conf = [0.6]
+
+    class FakeResult:
+        probs = FakeProbabilities()
+
+    class FakeModel:
+        task = "classify"
+        names = {2: "gloves"}
+        model = type("Model", (), {"args": {"imgsz": 224}})()
+
+        def predict(self, **kwargs):
+            return [FakeResult()]
+
+    monkeypatch.setattr(local_classifier.LocalClassificationService, "_model", FakeModel())
+    image_buffer = BytesIO()
+    Image.new("RGB", (2, 2), "white").save(image_buffer, format="PNG")
+    result = local_classifier.LocalClassificationService.classify(image_buffer.getvalue())
+
+    assert result["predicted_class"] == "gloves"
+    assert result["is_confident"] is False
+    assert result["requires_human_verification"] is True
+    assert result["top_predictions"][0]["class_name"] == "gloves"
 
 
 @pytest.mark.asyncio
