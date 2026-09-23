@@ -1,11 +1,13 @@
 import asyncio
 from datetime import date, time
+from io import BytesIO
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 
-from app.api import collection_routes
+from app.api import collection_routes, waste_routes
 from app.schemas.operations import CollectionRequestCreate, StatusUpdate
+from app.services.supabase_repository import SupabaseRepository
 
 
 class FakeRepository:
@@ -150,3 +152,87 @@ async def test_status_update_uses_request_code_and_normalizes_response(monkeypat
 
     assert result["request_id"] == "REQ-1"
     assert result["status"] == "Assigned"
+
+
+@pytest.mark.asyncio
+async def test_waste_classify_rejects_collector():
+    file = UploadFile(filename="waste.png", file=BytesIO(b"fake-image-data"))
+
+    with pytest.raises(HTTPException) as error:
+        await waste_routes.classify_waste(file=file, user={"id": "collector-1", "role": "collector"})
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "Forbidden"
+
+
+@pytest.mark.asyncio
+async def test_detections_reject_collector_access(monkeypatch):
+    class NoopRepo:
+        def get_facility_by_user_id(self, user_id):
+            return None
+
+        def insert_waste_record(self, row):
+            return {"status": "inserted", "data": [{"id": "waste-1"}]}
+
+        def insert_ai_classification(self, row):
+            return {"status": "inserted"}
+
+    monkeypatch.setattr("app.api.detection_routes.SupabaseRepository", lambda: NoopRepo())
+
+    with pytest.raises(HTTPException) as error:
+        await __import__("app.api.detection_routes", fromlist=["persist_detection"]).persist_detection(
+            {"category": "YELLOW", "confidence": 0.95, "bin": "yellow", "object": "gloves"},
+            {"id": "collector-1", "role": "collector"},
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "Forbidden"
+
+
+class RequestQuery:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def select(self, _columns):
+        return self
+
+    def order(self, _column, desc=False):
+        return self
+
+    def execute(self):
+        return type("Result", (), {"data": self.rows})()
+
+
+class RequestClient:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def table(self, _table):
+        return RequestQuery(self.rows)
+
+
+def test_collector_request_visibility_matrix(monkeypatch):
+    rows = [
+        {"request_code": "REQ-AVAILABLE", "status": "Requested", "assigned_collector_id": None},
+        {"request_code": "REQ-COLLECTOR-A", "status": "Requested", "assigned_collector_id": "collector-a"},
+        {"request_code": "REQ-COLLECTOR-B", "status": "Assigned", "assigned_collector_id": "collector-b"},
+        {"request_code": "REQ-COMPLETE", "status": "Processed", "assigned_collector_id": None},
+    ]
+    repo = SupabaseRepository()
+    repo.client = RequestClient(rows)
+    monkeypatch.setattr(repo, "get_collector_by_user_id", lambda _user_id: {"id": "collector-a"})
+
+    visible = repo.list_collection_requests_for_user({"id": "user-a", "role": "collector"})
+
+    assert [row["request_code"] for row in visible] == ["REQ-AVAILABLE", "REQ-COLLECTOR-A"]
+
+
+def test_facility_created_request_remains_visible_to_facility(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(collection_routes, "SupabaseRepository", lambda: repo)
+
+    result = asyncio.run(collection_routes.list_collection_requests({"id": "facility-user", "role": "facility"}))
+
+    assert result["items"][0]["request_id"] == "REQ-1"
+    assert result["items"][0]["status"] == "Requested"
+    assert result["items"][0]["collector_id"] is None

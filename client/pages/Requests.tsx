@@ -2,12 +2,13 @@
 import { CalendarDays, Check, ClipboardCheck, Clock3, MoreHorizontal, Plus, Search, Truck, Users, X, AlertTriangle } from "lucide-react";
 import { CardTitle, EmptyState, PageHeading, StatCard, StatusBadge } from "@/components/dashboard/primitives";
 import { categories, statuses } from "@/components/dashboard/data";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPatch, apiPost } from "@/lib/api";
 import type { CollectionRequest, WasteCategory } from "@/lib/types";
+import { SessionUser } from "@/lib/auth";
 
 const categoryLabels: Record<WasteCategory, string> = { YELLOW: "Yellow", RED: "Red", WHITE: "White", BLUE: "Blue" };
 type Request = CollectionRequest;
-export function Requests() {
+export function Requests({ user }: { user?: SessionUser }) {
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -42,6 +43,10 @@ export function Requests() {
         item.priority === priority),
   );
 
+  const pendingCount = user?.role === "collector"
+    ? requests.filter((item) => item.status === "Requested" && !item.collector_id).length
+    : requests.filter((item) => item.status === "Requested").length;
+
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -66,6 +71,22 @@ export function Requests() {
     }
   };
 
+  const handleDecision = async (item: Request, status: "Assigned" | "Rejected") => {
+    try {
+      const next = await apiPatch<Request>(`/api/collection-requests/${encodeURIComponent(item.request_id)}/status`, { status });
+      setRequests((current) => current.map((request) => (request.request_id === next.request_id ? { ...request, ...next, status: next.status } : request)));
+      setSelected((current) => (current && current.request_id === next.request_id ? { ...current, ...next, status: next.status } : current));
+      if (status === "Assigned") {
+        setToast(`${next.collection_id || next.request_id} accepted and shared with facility/admin`);
+      } else {
+        setToast(`${next.request_id} rejected`);
+      }
+      setTimeout(() => setToast(""), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The pickup decision could not be saved.");
+    }
+  };
+
   return (
     <>
       <PageHeading
@@ -73,12 +94,14 @@ export function Requests() {
         title="Waste Requests"
         subtitle="Manage and track medical-waste collection requests."
         action={
-          <button
-            className="primary-button"
-            onClick={() => setModal(true)}
-          >
-            <Plus size={15} /> New collection request
-          </button>
+          user?.role !== "collector" ? (
+            <button
+              className="primary-button"
+              onClick={() => setModal(true)}
+            >
+              <Plus size={15} /> New collection request
+            </button>
+          ) : null
         }
       />
 
@@ -86,11 +109,7 @@ export function Requests() {
         <StatCard
           icon={Clock3}
           label="Pending requests"
-          value={String(
-            requests.filter(
-              (r) => r.status === "Requested",
-            ).length,
-          ).padStart(2, "0")}
+          value={String(pendingCount).padStart(2, "0")}
           tone="tone-amber"
         />
 
@@ -245,10 +264,17 @@ export function Requests() {
                   </td>
 
                   <td>
-                    <MoreHorizontal
-                      size={16}
-                      className="text-slate-400"
-                    />
+                    {user?.role === "collector" && item.status === "Requested" && !item.collector_id ? (
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button className="secondary-button px-2 py-1 text-[10px]" onClick={() => void handleDecision(item, "Assigned")}>Accept</button>
+                        <button className="px-2 py-1 text-[10px] font-semibold text-rose-600" onClick={() => void handleDecision(item, "Rejected")}>Reject</button>
+                      </div>
+                    ) : (
+                      <MoreHorizontal
+                        size={16}
+                        className="text-slate-400"
+                      />
+                    )}
                   </td>
                 </tr>
               ))}
@@ -269,6 +295,8 @@ export function Requests() {
         <RequestDrawer
           item={selected}
           onClose={() => setSelected(null)}
+          user={user}
+          onDecision={handleDecision}
         />
       )}
 
@@ -293,9 +321,13 @@ export default Requests;
 function RequestDrawer({
   item,
   onClose,
+  user,
+  onDecision,
 }: {
   item: Request;
   onClose: () => void;
+  user?: SessionUser;
+  onDecision: (item: Request, status: "Assigned" | "Rejected") => Promise<void>;
 }) {
   return (
     <div
@@ -326,6 +358,13 @@ function RequestDrawer({
         </div>
 
         <div className="grid grid-cols-2 gap-3 py-5">
+          {(item.collection_id || item.barcode) && (
+            <>
+              <Detail label="Collection ID" value={item.collection_id || item.barcode || "-"} />
+              <Detail label="Barcode" value={item.barcode || item.collection_id || "-"} />
+            </>
+          )}
+
           <Detail
             label="Facility"
             value={item.facility_id || "Assigned facility"}
@@ -366,6 +405,13 @@ function RequestDrawer({
             value="18 Jun 2024 - 09:12 AM"
           />
         </div>
+
+        {user?.role === "collector" && item.status === "Requested" && !item.collector_id && (
+          <div className="mt-5 flex gap-2 border-t border-slate-100 pt-5">
+            <button className="primary-button" onClick={() => void onDecision(item, "Assigned")}>Accept pickup</button>
+            <button className="secondary-button" onClick={() => void onDecision(item, "Rejected")}>Reject</button>
+          </div>
+        )}
 
         <div className="border-t border-slate-100 pt-5">
           <p className="text-xs font-bold text-navy">

@@ -6,6 +6,8 @@ export type CollectionRequest = {
   request_id: string;
   facility_id?: string | null;
   waste_record_id?: string | null;
+  collection_id?: string | null;
+  barcode?: string | null;
   category: WasteCategory;
   quantity_kg: number;
   priority: "Normal" | "High" | "Emergency";

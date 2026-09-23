@@ -29,6 +29,8 @@ def _to_api_request(row: dict[str, Any]) -> dict[str, Any]:
         "pickup_date": row.get("preferred_pickup_date", row.get("pickup_date")),
         "pickup_time": row.get("preferred_pickup_time", row.get("pickup_time")),
         "collector_id": row.get("assigned_collector_id", row.get("collector_id")),
+        "collection_id": row.get("collection_id") or row.get("collection_id_override"),
+        "barcode": row.get("barcode"),
     }
 
 
@@ -86,6 +88,8 @@ async def create_collection_request(
 
 @router.patch("/collection-requests/{request_id}/status")
 async def update_collection_request_status(request_id: str, payload: StatusUpdate, user: dict[str, Any] = Depends(require_roles("facility", "collector", "administrator"))) -> dict[str, Any]:
+    if user.get("role") not in {"facility", "collector", "administrator"}:
+        raise HTTPException(status_code=403, detail="Forbidden")
     repo = SupabaseRepository()
     current = repo.get_collection_request(request_id)
     if not current:
@@ -93,9 +97,33 @@ async def update_collection_request_status(request_id: str, payload: StatusUpdat
     if user.get("role") == "facility" and current.get("facility_id") != _facility_id(repo, user):
         raise HTTPException(status_code=403, detail="Forbidden")
     collector = repo.get_collector_by_user_id(str(user.get("id"))) or {}
-    if user.get("role") == "collector" and current.get("assigned_collector_id") != collector.get("id"):
+    if user.get("role") == "collector" and current.get("assigned_collector_id") not in (None, collector.get("id")):
         raise HTTPException(status_code=403, detail="Forbidden")
-    result = repo.update_collection_request(request_id, {"status": payload.status})
+
+    update_values: dict[str, Any] = {"status": payload.status}
+    if payload.status == "Assigned" and user.get("role") == "collector":
+        if current.get("status") != "Requested" or current.get("assigned_collector_id") is not None:
+            raise HTTPException(status_code=409, detail="Collection request is no longer available")
+        if not collector.get("id"):
+            raise HTTPException(status_code=409, detail="Collector profile is not provisioned")
+        collection_id = current.get("collection_id") or f"COL-{uuid4().hex[:12].upper()}"
+        update_values = {
+            "status": "Assigned",
+            "assigned_collector_id": collector["id"],
+            "collection_id": collection_id,
+            "barcode": current.get("barcode") or collection_id,
+        }
+    elif payload.status == "Rejected" and user.get("role") == "collector":
+        # The deployed enum has no Rejected value; leave it Requested so another collector can claim it.
+        update_values["status"] = current.get("status", "Requested")
+        update_values["assigned_collector_id"] = None
+
+    if payload.status == "Assigned" and user.get("role") == "collector":
+        result = repo.accept_collection_request(request_id, collector["id"], update_values)
+    else:
+        result = repo.update_collection_request(request_id, update_values)
     if result.get("status") != "updated":
-        raise HTTPException(status_code=503 if result.get("status") == "skipped" else 400, detail=result.get("detail", "Status update failed"))
-    return _to_api_request(result["data"][0] if result.get("data") else {"request_code": request_id, "status": payload.status})
+        error_status = 503 if result.get("status") == "skipped" else 409 if result.get("status") == "conflict" else 400
+        raise HTTPException(status_code=error_status, detail=result.get("detail", "Status update failed"))
+    response = result["data"][0] if result.get("data") else {"request_code": request_id, "status": payload.status}
+    return _to_api_request(response)

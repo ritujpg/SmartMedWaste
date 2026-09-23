@@ -35,9 +35,11 @@ function Overview({ user, analytics }: { user: SessionUser; analytics: Analytics
               <FileText size={15} /> Waste Reports
             </Link>
 
-            <Link to="/scanner" className="primary-button">
-              <ScanLine size={16} /> Scan waste
-            </Link>
+            {user.role !== "collector" && (
+              <Link to="/scanner" className="primary-button">
+                <ScanLine size={16} /> Scan waste
+              </Link>
+            )}
           </>
         }
       />
@@ -240,21 +242,25 @@ function Overview({ user, analytics }: { user: SessionUser; analytics: Analytics
           />
 
           <div className="grid gap-2 sm:grid-cols-2">
-            <QuickAction
-              icon={ScanLine}
-              label="Scan waste"
-              to="/scanner"
-            />
+            {user.role !== "collector" && (
+              <QuickAction
+                icon={ScanLine}
+                label="Scan waste"
+                to="/scanner"
+              />
+            )}
 
-            <QuickAction
-              icon={Plus}
-              label="Create collection request"
-              to="/requests"
-            />
+            {user.role !== "collector" && (
+              <QuickAction
+                icon={Plus}
+                label="Create collection request"
+                to="/requests"
+              />
+            )}
 
             <QuickAction
               icon={QrCode}
-              label="Track waste"
+              label={user.role === "collector" ? "Verify pickup" : "Track waste"}
               to="/tracking"
             />
 
@@ -320,11 +326,11 @@ export function Dashboard({ user }: { user: SessionUser }) {
   } else if (
     location.pathname === "/scanner"
   ) {
-    content = <Scanner />;
+    content = user.role === "collector" ? <Requests user={user} /> : <Scanner />;
   } else if (
     location.pathname === "/requests"
   ) {
-    content = <Requests />;
+    content = <Requests user={user} />;
   } else if (
     location.pathname === "/tracking"
   ) {

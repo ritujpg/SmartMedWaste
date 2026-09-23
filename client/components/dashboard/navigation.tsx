@@ -29,7 +29,7 @@ function NavigationItem({ item, active }: { item: NavItem; active: boolean }) {
 export function Sidebar({ user, open, onClose }: { user: SessionUser; open: boolean; onClose: () => void }) {
   const location = useLocation();
   const roleItems: NavItem[] = user.role === "collector"
-    ? [{ label: "Dashboard", icon: Gauge, path: "/collector" }, { label: "Today's Pickups", icon: ClipboardCheck, path: "/requests" }, { label: "Route", icon: Truck, path: "/route" }, { label: "Scan Waste", icon: ScanLine, path: "/scanner" }, { label: "Emergency Alerts", icon: Bell, path: "/alerts" }, { label: "History", icon: FileBarChart, path: "/reports" }, { label: "Profile", icon: Settings, path: "/settings" }]
+    ? [{ label: "Dashboard", icon: Gauge, path: "/collector" }, { label: "Today's Pickups", icon: ClipboardCheck, path: "/requests" }, { label: "Route", icon: Truck, path: "/route" }, { label: "Scan QR / Verify Pickup", icon: QrCode, path: "/tracking" }, { label: "Emergency Alerts", icon: Bell, path: "/alerts" }, { label: "History", icon: FileBarChart, path: "/reports" }, { label: "Profile", icon: Settings, path: "/settings" }]
     : user.role === "admin"
       ? [{ label: "Overview", icon: Gauge, path: "/admin" }, { label: "Facilities", icon: Hospital, path: "/facilities" }, { label: "Collectors", icon: Users, path: "/collectors" }, { label: "Waste Tracking", icon: QrCode, path: "/tracking" }, { label: "Compliance", icon: ShieldCheck, path: "/compliance" }, { label: "Heatmap", icon: Activity, path: "/heatmap" }, { label: "Routes", icon: Truck, path: "/route" }, { label: "Alerts", icon: Bell, path: "/alerts" }, { label: "Reports", icon: FileBarChart, path: "/reports" }]
       : navItems;

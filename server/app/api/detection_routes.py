@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from typing import Any
-
-from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from app.core.dependencies import get_current_user_from_request
+from app.core.dependencies import get_current_user_from_request, require_roles
 from app.services.detection import DetectionService
 from app.services.supabase_repository import SupabaseRepository
 
@@ -15,17 +13,21 @@ router = APIRouter(tags=["detection"])
 
 
 @router.post("/detect")
-async def detect(file: UploadFile = File(...), user: dict[str, Any] = Depends(get_current_user_from_request)) -> dict[str, Any]:
+async def detect(file: UploadFile = File(...), user: dict[str, Any] = Depends(require_roles("facility", "administrator"))) -> dict[str, Any]:
     """Receive the current phone-camera frame as multipart/form-data and hand it
     to the detection service. The service returns a mock medical-waste result for now,
     and it is structured so a later YOLOv11 provider can replace the mock detector.
     """
+    if user.get("role") not in {"facility", "administrator"}:
+        raise HTTPException(status_code=403, detail="Forbidden")
     service = DetectionService()
     return await service.detect(file)
 
 
 @router.post("/api/waste/detections", status_code=201)
-async def persist_detection(payload: dict[str, Any], user: dict[str, Any] = Depends(get_current_user_from_request)) -> dict[str, Any]:
+async def persist_detection(payload: dict[str, Any], user: dict[str, Any] = Depends(require_roles("facility", "administrator"))) -> dict[str, Any]:
+    if user.get("role") not in {"facility", "administrator"}:
+        raise HTTPException(status_code=403, detail="Forbidden")
     category = str(payload.get("category") or "").upper()
     category_map = {"YELLOW", "RED", "WHITE", "BLUE"}
     if category not in category_map:

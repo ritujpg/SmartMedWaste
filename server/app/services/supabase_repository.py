@@ -357,6 +357,14 @@ class SupabaseRepository:
     def get_collector_by_user_id(self, user_id: str) -> dict[str, Any] | None:
         return self._single("collectors", "user_id", user_id)
 
+    @staticmethod
+    def _collector_can_see_request(row: dict[str, Any], collector_id: Any) -> bool:
+        status = str(row.get("status") or "").strip().casefold()
+        assigned_collector_id = row.get("assigned_collector_id")
+        unassigned = assigned_collector_id is None or str(assigned_collector_id).strip().casefold() in {"", "null"}
+        assigned_to_collector = str(assigned_collector_id).strip() == str(collector_id).strip()
+        return (status == "requested" and unassigned) or assigned_to_collector
+
     def list_collection_requests_for_user(self, user: dict[str, Any]) -> list[dict[str, Any]]:
         if not self.client:
             return []
@@ -366,9 +374,16 @@ class SupabaseRepository:
             if role == "facility":
                 facility = self.get_facility_by_user_id(str(user.get("id")))
                 query = query.eq("facility_id", facility.get("id")) if facility else query.eq("facility_id", "00000000-0000-0000-0000-000000000000")
-            elif role == "collector":
+                return query.order("created_at", desc=True).execute().data or []
+            if role == "collector":
                 collector = self.get_collector_by_user_id(str(user.get("id")))
-                query = query.eq("assigned_collector_id", collector.get("id")) if collector else query.eq("assigned_collector_id", "00000000-0000-0000-0000-000000000000")
+                rows = query.order("created_at", desc=True).execute().data or []
+                if not collector:
+                    return []
+                collector_id = collector.get("id")
+                if not collector_id:
+                    return []
+                return [row for row in rows if self._collector_can_see_request(row, collector_id)]
             return query.order("created_at", desc=True).execute().data or []
         except Exception:
             return []
@@ -389,6 +404,25 @@ class SupabaseRepository:
         try:
             result = self.client.table("collection_requests").update(values).eq("request_code", request_id).execute()
             return {"status": "updated", "data": result.data or []}
+        except Exception as exc:
+            return {"status": "error", "detail": str(exc)}
+
+    def accept_collection_request(self, request_id: str, collector_id: str, values: dict[str, Any]) -> dict[str, Any]:
+        """Claim only an unassigned requested row so two collectors cannot win it."""
+        if not self.client:
+            return {"status": "skipped", "detail": "Supabase is not configured"}
+        try:
+            result = (
+                self.client.table("collection_requests")
+                .update({**values, "assigned_collector_id": collector_id})
+                .eq("request_code", request_id)
+                .eq("status", "Requested")
+                .is_("assigned_collector_id", "null")
+                .execute()
+            )
+            if not result.data:
+                return {"status": "conflict", "detail": "Collection request is no longer available"}
+            return {"status": "updated", "data": result.data}
         except Exception as exc:
             return {"status": "error", "detail": str(exc)}
 

@@ -78,7 +78,13 @@ async def delete_waste_record(waste_id: str, user: dict[str, Any] = Depends(requ
 
 
 @router.post("/waste/classify")
-async def classify_waste(file: UploadFile = File(...), model: str = Form("gemini")) -> dict[str, Any]:
+async def classify_waste(
+    file: UploadFile = File(...),
+    model: str = Form("gemini"),
+    user: dict[str, Any] = Depends(require_roles("facility", "administrator")),
+) -> dict[str, Any]:
+    if isinstance(user, dict) and user.get("role") not in {"facility", "administrator"}:
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not file.filename:
         raise HTTPException(status_code=400, detail="image file is required")
     lower = file.filename.lower()

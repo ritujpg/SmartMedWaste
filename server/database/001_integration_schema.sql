@@ -13,4 +13,6 @@ alter table public.tracking_events add column if not exists tracking_id text;
 create index if not exists idx_tracking_events_tracking_id on public.tracking_events(tracking_id);
 
 alter table public.collection_requests add column if not exists updated_at timestamptz not null default now();
+alter table public.collection_requests add column if not exists collection_id text;
+alter table public.collection_requests add column if not exists barcode text;
 alter table public.routes add column if not exists updated_at timestamptz not null default now();

@@ -113,6 +113,8 @@ create table if not exists public.collection_requests (
   preferred_pickup_date date,
   preferred_pickup_time time,
   assigned_collector_id uuid references public.collectors(id) on delete set null,
+  collection_id text,
+  barcode text,
   destination text,
   estimated_arrival timestamptz,
   status public.request_status not null default 'Requested',
@@ -121,8 +123,9 @@ create table if not exists public.collection_requests (
 );
 
 create index if not exists idx_collection_requests_facility on public.collection_requests(facility_id);
-create index if not exists idx_collection_requests_collector on public.collection_requests(collector_id);
+create index if not exists idx_collection_requests_collector on public.collection_requests(assigned_collector_id);
 create index if not exists idx_collection_requests_status on public.collection_requests(status);
+create index if not exists idx_collection_requests_collection_id on public.collection_requests(collection_id);
 
 create table if not exists public.tracking_events (
   id uuid primary key default gen_random_uuid(),

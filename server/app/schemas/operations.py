@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 Category = Literal["YELLOW", "RED", "WHITE", "BLUE"]
 RequestPriority = Literal["Normal", "High", "Emergency"]
-RequestStatus = Literal["Requested", "Assigned", "Collector En Route", "Picked Up", "In Transit", "Delivered", "Processed"]
+RequestStatus = Literal["Requested", "Assigned", "Collector En Route", "Picked Up", "In Transit", "Delivered", "Processed", "Rejected"]
 
 class CollectionRequestCreate(BaseModel):
     category: Category
